@@ -20,42 +20,143 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // AgentSpec defines the desired state of Agent
 type AgentSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// Objective is the high-level goal of the agent
+	// +kubebuilder:validation:Required
+	Objective string `json:"objective"`
 
-	// foo is an example field of Agent. Edit agent_types.go to remove/update
+	// Tasks is the list of tasks the agent should complete
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Tasks []Task `json:"tasks,omitempty"`
+
+	// EndingCondition defines when the agent should stop
+	// +kubebuilder:validation:Required
+	EndingCondition EndingCondition `json:"endingCondition"`
+
+	// Input defines the input data for the agent
+	// +optional
+	Input *AgentIO `json:"input,omitempty"`
+
+	// Output defines where the agent should write its result
+	// +optional
+	Output *AgentIO `json:"output,omitempty"`
+
+	// Memory is a reference to a Memory resource to attach to this agent
+	// +optional
+	Memory *MemoryRef `json:"memory,omitempty"`
+
+	// Tools is the list of tools available to the agent
+	// +optional
+	// +kubebuilder:default={"read","write","bash","todo","message"}
+	Tools []Tool `json:"tools,omitempty"`
 }
+
+// Task defines a unit of work for the agent
+type Task struct {
+	// Description of the task
+	// +kubebuilder:validation:Required
+	Description string `json:"description"`
+
+	// Priority of the task, lower value means higher priority
+	// +optional
+	// +kubebuilder:default=0
+	Priority int32 `json:"priority,omitempty"`
+}
+
+// EndingCondition defines one or more conditions that will stop the agent
+type EndingCondition struct {
+	// Natural is an LLM-evaluated natural language stopping condition
+	// +optional
+	Natural *string `json:"natural,omitempty"`
+
+	// MaxTurns is the maximum number of turns before the agent stops
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	MaxTurns *int32 `json:"maxTurns,omitempty"`
+
+	// TimeoutSeconds is the maximum time in seconds before the agent stops
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	TimeoutSeconds *int32 `json:"timeoutSeconds,omitempty"`
+}
+
+// AgentIOType represents the type of input or output for an Agent
+type AgentIOType string
+
+const (
+	AgentIOTypeString AgentIOType = "string"
+	AgentIOTypeFile   AgentIOType = "file"
+)
+
+// AgentIO defines input or output for the agent
+type AgentIO struct {
+	// Type is either "string" or "file"
+	// +kubebuilder:validation:Enum=string;file
+	Type AgentIOType `json:"type"`
+
+	// Value is used when type is "string"
+	// +optional
+	Value *string `json:"value,omitempty"`
+
+	// Path is used when type is "file"
+	// +optional
+	Path *string `json:"path,omitempty"`
+}
+
+// MemoryRef references a Memory resource
+type MemoryRef struct {
+	// Ref is the name of a Memory resource in the same namespace
+	// +kubebuilder:validation:Required
+	Ref string `json:"ref"`
+}
+
+// Tool represents an available tool for the agent
+// +kubebuilder:validation:Enum=read;write;bash;todo;message
+type Tool string
+
+const (
+	ToolRead    Tool = "read"
+	ToolWrite   Tool = "write"
+	ToolBash    Tool = "bash"
+	ToolTodo    Tool = "todo"
+	ToolMessage Tool = "message"
+)
+
+// AgentPhase represents the lifecycle phase of an Agent
+type AgentPhase string
+
+const (
+	AgentPhasePending   AgentPhase = "Pending"
+	AgentPhaseRunning   AgentPhase = "Running"
+	AgentPhasePaused    AgentPhase = "Paused"
+	AgentPhaseSucceeded AgentPhase = "Succeeded"
+	AgentPhaseFailed    AgentPhase = "Failed"
+)
 
 // AgentStatus defines the observed state of Agent.
 type AgentStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the Agent resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
+	// Phase is the current lifecycle phase of the agent
+	// +kubebuilder:validation:Enum=Pending;Running;Paused;Succeeded;Failed
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Phase AgentPhase `json:"phase,omitempty"`
+
+	// CurrentTurn is the current agentic loop iteration
+	// +optional
+	CurrentTurn int32 `json:"currentTurn,omitempty"`
+
+	// CurrentTask is the description of the task currently being executed
+	// +optional
+	CurrentTask string `json:"currentTask,omitempty"`
+
+	// StartTime is when the agent started running
+	// +optional
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+
+	// TerminationReason explains why the agent stopped
+	// +kubebuilder:validation:Enum=NaturalConditionMet;MaxTurnsReached;TimedOut;Error;Stopped
+	// +optional
+	TerminationReason string `json:"terminationReason,omitempty"`
 }
 
 // +kubebuilder:object:root=true
