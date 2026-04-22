@@ -20,43 +20,53 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // MemorySpec defines the desired state of Memory
 type MemorySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// StorageSize is the size of the memory volume e.g. "10Gi"
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^([0-9]+)(Ki|Mi|Gi|Ti)$`
+	StorageSize string `json:"storageSize"`
 
-	// foo is an example field of Memory. Edit memory_types.go to remove/update
+	// AccessMode defines how the memory volume can be mounted
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// +kubebuilder:default=ReadWriteOnce
+	AccessMode MemoryAccessMode `json:"accessMode,omitempty"`
 }
+
+// MemoryAccessMode represents the access mode of the memory volume
+type MemoryAccessMode string
+
+const (
+	MemoryAccessModeReadWriteOnce MemoryAccessMode = "ReadWriteOnce"
+	MemoryAccessModeReadWriteMany MemoryAccessMode = "ReadWriteMany"
+)
 
 // MemoryStatus defines the observed state of Memory.
 type MemoryStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Phase is the current lifecycle phase of the memory resource
+	// +kubebuilder:validation:Enum=Pending;Bound;Lost
+	// +optional
+	Phase MemoryPhase `json:"phase,omitempty"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// PVCRef is the name of the backing PersistentVolumeClaim
+	// +optional
+	PVCRef string `json:"pvcRef,omitempty"`
 
-	// conditions represent the current state of the Memory resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// Conditions represent the current state of the Memory resource
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
+
+// MemoryPhase represents the lifecycle phase of a Memory resource
+type MemoryPhase string
+
+const (
+	MemoryPhasePending MemoryPhase = "Pending"
+	MemoryPhaseBound   MemoryPhase = "Bound"
+	MemoryPhaseLost    MemoryPhase = "Lost"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
