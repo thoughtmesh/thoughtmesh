@@ -1,0 +1,35 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - core.thoughtmesh.dev
+  resources:
+  - agents
+  - memories
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.thoughtmesh.dev
+  resources:
+  - agents/finalizers
+  - memories/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - core.thoughtmesh.dev
+  resources:
+  - agents/status
+  - memories/status
+  verbs:
+  - get
+  - patch
+  - update
