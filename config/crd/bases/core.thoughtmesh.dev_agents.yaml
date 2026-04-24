@@ -127,26 +127,7 @@ spec:
                   - description
                   type: object
                 type: array
-              tools:
-                default:
-                - read
-                - write
-                - bash
-                - todo
-                - message
-                description: Tools is the list of tools available to the agent
-                items:
-                  description: Tool represents an available tool for the agent
-                  enum:
-                  - read
-                  - write
-                  - bash
-                  - todo
-                  - message
-                  type: string
-                type: array
             required:
-            - endingCondition
             - objective
             type: object
           status:

@@ -117,7 +117,11 @@ func (in *AgentSpec) DeepCopyInto(out *AgentSpec) {
 		*out = make([]Task, len(*in))
 		copy(*out, *in)
 	}
-	in.EndingCondition.DeepCopyInto(&out.EndingCondition)
+	if in.EndingCondition != nil {
+		in, out := &in.EndingCondition, &out.EndingCondition
+		*out = new(EndingCondition)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Input != nil {
 		in, out := &in.Input, &out.Input
 		*out = new(AgentIO)
@@ -132,11 +136,6 @@ func (in *AgentSpec) DeepCopyInto(out *AgentSpec) {
 		in, out := &in.Memory, &out.Memory
 		*out = new(MemoryRef)
 		**out = **in
-	}
-	if in.Tools != nil {
-		in, out := &in.Tools, &out.Tools
-		*out = make([]Tool, len(*in))
-		copy(*out, *in)
 	}
 }
 

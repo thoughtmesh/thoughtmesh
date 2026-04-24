@@ -20,7 +20,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 .PHONY: all
-all: build
+all: build-manager build-agent
 
 ##@ General
 
@@ -104,13 +104,21 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 
-.PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+.PHONY: build-manager
+build-manager: manifests generate fmt vet ## Build manager binary.
+	go build -o bin/manager ./cmd/manager/main.go
+
+.PHONY: run-manager
+run-manager: manifests generate fmt vet ## Run a controller from your host.
+	go run ./cmd/manager/main.go
+
+.PHONY: build-agent
+build-agent: manifests generate fmt vet ## Build manager binary.
+	go build -o bin/agent ./cmd/agent/main.go
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+run-agent: manifests generate fmt vet ## Run a controller from your host.
+	go run ./cmd/agent/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
