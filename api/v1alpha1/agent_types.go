@@ -26,37 +26,9 @@ type AgentSpec struct {
 	// +kubebuilder:validation:Required
 	Objective string `json:"objective"`
 
-	// Tasks is the list of tasks the agent should complete
-	// +optional
-	Tasks []Task `json:"tasks,omitempty"`
-
 	// EndingCondition defines when the agent should stop
 	// +optional
 	EndingCondition *EndingCondition `json:"endingCondition"`
-
-	// Input defines the input data for the agent
-	// +optional
-	Input *AgentIO `json:"input,omitempty"`
-
-	// Output defines where the agent should write its result
-	// +optional
-	Output *AgentIO `json:"output,omitempty"`
-
-	// Memory is a reference to a Memory resource to attach to this agent
-	// +optional
-	Memory *MemoryRef `json:"memory,omitempty"`
-}
-
-// Task defines a unit of work for the agent
-type Task struct {
-	// Description of the task
-	// +kubebuilder:validation:Required
-	Description string `json:"description"`
-
-	// Priority of the task, lower value means higher priority
-	// +optional
-	// +kubebuilder:default=0
-	Priority int32 `json:"priority,omitempty"`
 }
 
 // EndingCondition defines one or more conditions that will stop the agent
@@ -76,36 +48,6 @@ type EndingCondition struct {
 	TimeoutSeconds *int32 `json:"timeoutSeconds,omitempty"`
 }
 
-// AgentIOType represents the type of input or output for an Agent
-type AgentIOType string
-
-const (
-	AgentIOTypeString AgentIOType = "string"
-	AgentIOTypeFile   AgentIOType = "file"
-)
-
-// AgentIO defines input or output for the agent
-type AgentIO struct {
-	// Type is either "string" or "file"
-	// +kubebuilder:validation:Enum=string;file
-	Type AgentIOType `json:"type"`
-
-	// Value is used when type is "string"
-	// +optional
-	Value *string `json:"value,omitempty"`
-
-	// Path is used when type is "file"
-	// +optional
-	Path *string `json:"path,omitempty"`
-}
-
-// MemoryRef references a Memory resource
-type MemoryRef struct {
-	// Ref is the name of a Memory resource in the same namespace
-	// +kubebuilder:validation:Required
-	Ref string `json:"ref"`
-}
-
 // AgentPhase represents the lifecycle phase of an Agent
 type AgentPhase string
 
@@ -123,14 +65,6 @@ type AgentStatus struct {
 	// +kubebuilder:validation:Enum=Pending;Running;Paused;Succeeded;Failed
 	// +optional
 	Phase AgentPhase `json:"phase,omitempty"`
-
-	// CurrentTurn is the current agentic loop iteration
-	// +optional
-	CurrentTurn int32 `json:"currentTurn,omitempty"`
-
-	// CurrentTask is the description of the task currently being executed
-	// +optional
-	CurrentTask string `json:"currentTask,omitempty"`
 
 	// StartTime is when the agent started running
 	// +optional

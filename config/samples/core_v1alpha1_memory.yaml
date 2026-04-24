@@ -1,9 +1,0 @@
-apiVersion: core.thoughtmesh.dev/v1alpha1
-kind: Memory
-metadata:
-  labels:
-    app.kubernetes.io/name: thoughtmesh
-    app.kubernetes.io/managed-by: kustomize
-  name: memory-sample
-spec:
-  # TODO(user): Add fields here

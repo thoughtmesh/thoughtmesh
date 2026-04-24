@@ -32,7 +32,6 @@ rules:
   - core.thoughtmesh.dev
   resources:
   - agents
-  - memories
   verbs:
   - create
   - delete
@@ -45,14 +44,12 @@ rules:
   - core.thoughtmesh.dev
   resources:
   - agents/finalizers
-  - memories/finalizers
   verbs:
   - update
 - apiGroups:
   - core.thoughtmesh.dev
   resources:
   - agents/status
-  - memories/status
   verbs:
   - get
   - patch

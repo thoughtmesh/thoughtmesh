@@ -18,13 +18,4 @@ resources:
   kind: Agent
   path: github.com/thoughtmesh/thoughtmesh/api/v1alpha1
   version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: thoughtmesh.dev
-  group: core
-  kind: Memory
-  path: github.com/thoughtmesh/thoughtmesh/api/v1alpha1
-  version: v1alpha1
 version: "3"

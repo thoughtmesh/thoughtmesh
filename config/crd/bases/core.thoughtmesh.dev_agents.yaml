@@ -59,88 +59,15 @@ spec:
                     minimum: 1
                     type: integer
                 type: object
-              input:
-                description: Input defines the input data for the agent
-                properties:
-                  path:
-                    description: Path is used when type is "file"
-                    type: string
-                  type:
-                    description: Type is either "string" or "file"
-                    enum:
-                    - string
-                    - file
-                    type: string
-                  value:
-                    description: Value is used when type is "string"
-                    type: string
-                required:
-                - type
-                type: object
-              memory:
-                description: Memory is a reference to a Memory resource to attach
-                  to this agent
-                properties:
-                  ref:
-                    description: Ref is the name of a Memory resource in the same
-                      namespace
-                    type: string
-                required:
-                - ref
-                type: object
               objective:
                 description: Objective is the high-level goal of the agent
                 type: string
-              output:
-                description: Output defines where the agent should write its result
-                properties:
-                  path:
-                    description: Path is used when type is "file"
-                    type: string
-                  type:
-                    description: Type is either "string" or "file"
-                    enum:
-                    - string
-                    - file
-                    type: string
-                  value:
-                    description: Value is used when type is "string"
-                    type: string
-                required:
-                - type
-                type: object
-              tasks:
-                description: Tasks is the list of tasks the agent should complete
-                items:
-                  description: Task defines a unit of work for the agent
-                  properties:
-                    description:
-                      description: Description of the task
-                      type: string
-                    priority:
-                      default: 0
-                      description: Priority of the task, lower value means higher
-                        priority
-                      format: int32
-                      type: integer
-                  required:
-                  - description
-                  type: object
-                type: array
             required:
             - objective
             type: object
           status:
             description: status defines the observed state of Agent
             properties:
-              currentTask:
-                description: CurrentTask is the description of the task currently
-                  being executed
-                type: string
-              currentTurn:
-                description: CurrentTurn is the current agentic loop iteration
-                format: int32
-                type: integer
               phase:
                 description: Phase is the current lifecycle phase of the agent
                 enum:
