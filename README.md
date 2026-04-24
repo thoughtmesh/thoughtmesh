@@ -67,9 +67,9 @@ kubectl describe agent my-agent
 
 The `status` subresource exposes:
 
-| Field          | Description                        |
-|----------------|------------------------------------|
-| `phase`        | `Pending`, `Running`, `Succeeded`, `Failed` |
+| Field          | Description                                              |
+|----------------|----------------------------------------------------------|
+| `phase`        | `Pending`, `Working`, `Waiting`, `Succeeded`, `Failed`   |
 
 ---
 
