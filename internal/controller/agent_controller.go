@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +32,7 @@ import (
 	corev1alpha1 "github.com/thoughtmesh/thoughtmesh/api/v1alpha1"
 )
 
-const TMAgentImge = "ghcr.io/thoughtmesh/thoughtmesh/tm-agent:latest"
+const TMAgentImage = "ghcr.io/thoughtmesh/thoughtmesh/thoughtmesh-agent:main"
 
 // AgentReconciler reconciles an Agent object
 type AgentReconciler struct {
@@ -44,7 +43,7 @@ type AgentReconciler struct {
 // +kubebuilder:rbac:groups=core.thoughtmesh.dev,resources=agents,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.thoughtmesh.dev,resources=agents/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.thoughtmesh.dev,resources=agents/finalizers,verbs=update
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 
 func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -59,9 +58,9 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile StatefulSet
-	if err := r.reconcileStatefulSet(ctx, agent); err != nil {
-		log.Error(err, "failed to reconcile StatefulSet")
+	// Reconcile Deployment
+	if err := r.reconcileDeployment(ctx, agent); err != nil {
+		log.Error(err, "failed to reconcile Deployment")
 		return ctrl.Result{}, err
 	}
 
@@ -80,10 +79,10 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return ctrl.Result{}, nil
 }
 
-func (r *AgentReconciler) reconcileStatefulSet(ctx context.Context, agent *corev1alpha1.Agent) error {
-	desired := r.buildStatefulSet(agent)
+func (r *AgentReconciler) reconcileDeployment(ctx context.Context, agent *corev1alpha1.Agent) error {
+	desired := r.buildDeployment(agent)
 
-	existing := &appsv1.StatefulSet{}
+	existing := &appsv1.Deployment{}
 	err := r.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, existing)
 	if errors.IsNotFound(err) {
 		if err := ctrl.SetControllerReference(agent, desired, r.Scheme); err != nil {
@@ -95,7 +94,7 @@ func (r *AgentReconciler) reconcileStatefulSet(ctx context.Context, agent *corev
 		return err
 	}
 
-	// Update the image if it changed
+	// Update the image and env if changed
 	existing.Spec.Template.Spec.Containers[0].Image = desired.Spec.Template.Spec.Containers[0].Image
 	existing.Spec.Template.Spec.Containers[0].Env = desired.Spec.Template.Spec.Containers[0].Env
 	return r.Update(ctx, existing)
@@ -116,15 +115,15 @@ func (r *AgentReconciler) reconcileService(ctx context.Context, agent *corev1alp
 }
 
 func (r *AgentReconciler) reconcileStatus(ctx context.Context, agent *corev1alpha1.Agent) error {
-	sts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, sts); err != nil {
+	deploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, deploy); err != nil {
 		return err
 	}
 
 	patch := client.MergeFrom(agent.DeepCopy())
 
-	if sts.Status.ReadyReplicas > 0 {
-		agent.Status.Phase = corev1alpha1.AgentPhaseRunning
+	if deploy.Status.ReadyReplicas > 0 {
+		agent.Status.Phase = corev1alpha1.AgentPhaseWorking
 	} else {
 		agent.Status.Phase = corev1alpha1.AgentPhasePending
 	}
@@ -132,18 +131,17 @@ func (r *AgentReconciler) reconcileStatus(ctx context.Context, agent *corev1alph
 	return r.Status().Patch(ctx, agent, patch)
 }
 
-func (r *AgentReconciler) buildStatefulSet(agent *corev1alpha1.Agent) *appsv1.StatefulSet {
+func (r *AgentReconciler) buildDeployment(agent *corev1alpha1.Agent) *appsv1.Deployment {
 	labels := labelsForAgent(agent.Name)
 
-	return &appsv1.StatefulSet{
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      agent.Name,
 			Namespace: agent.Namespace,
 			Labels:    labels,
 		},
-		Spec: appsv1.StatefulSetSpec{
-			Replicas:    new(int32(1)),
-			ServiceName: agent.Name,
+		Spec: appsv1.DeploymentSpec{
+			Replicas: new(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -155,7 +153,7 @@ func (r *AgentReconciler) buildStatefulSet(agent *corev1alpha1.Agent) *appsv1.St
 					Containers: []corev1.Container{
 						{
 							Name:  "agent",
-							Image: TMAgentImge,
+							Image: TMAgentImage,
 							Env:   r.buildEnvVars(agent),
 						},
 					},
@@ -176,7 +174,7 @@ func (r *AgentReconciler) buildService(agent *corev1alpha1.Agent) *corev1.Servic
 		},
 		Spec: corev1.ServiceSpec{
 			Selector:  labels,
-			ClusterIP: "None", // headless, for StatefulSet DNS
+			ClusterIP: "None", // headless service
 			Ports: []corev1.ServicePort{
 				{
 					Name:     "queue",
@@ -189,62 +187,17 @@ func (r *AgentReconciler) buildService(agent *corev1alpha1.Agent) *corev1.Servic
 }
 
 func (r *AgentReconciler) buildEnvVars(agent *corev1alpha1.Agent) []corev1.EnvVar {
-	envVars := []corev1.EnvVar{
-		{
-			Name:  "AGENT_NAME",
-			Value: agent.Name,
-		},
-		{
-			Name:  "AGENT_NAMESPACE",
-			Value: agent.Namespace,
-		},
-		{
-			Name:  "AGENT_OBJECTIVE",
-			Value: agent.Spec.Objective,
-		},
+	var system string
+	if agent.Spec.System != nil {
+		system = *agent.Spec.System
 	}
 
-	// Ending conditions
-	if agent.Spec.EndingCondition.Natural != nil {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "ENDING_CONDITION_NATURAL",
-			Value: *agent.Spec.EndingCondition.Natural,
-		})
+	return []corev1.EnvVar{
+		{Name: "AGENT_NAME", Value: agent.Name},
+		{Name: "AGENT_OBJECTIVE", Value: agent.Spec.Objective},
+		{Name: "AGENT_SYSTEM", Value: system},
+		{Name: "AGENT_TERMINATION", Value: agent.Spec.Termination},
 	}
-	if agent.Spec.EndingCondition.MaxTurns != nil {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "ENDING_CONDITION_MAX_TURNS",
-			Value: fmt.Sprintf("%d", *agent.Spec.EndingCondition.MaxTurns),
-		})
-	}
-	if agent.Spec.EndingCondition.TimeoutSeconds != nil {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "ENDING_CONDITION_TIMEOUT_SECONDS",
-			Value: fmt.Sprintf("%d", *agent.Spec.EndingCondition.TimeoutSeconds),
-		})
-	}
-
-	// Input
-	if agent.Spec.Input != nil {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "INPUT_TYPE",
-			Value: string(agent.Spec.Input.Type),
-		})
-		if agent.Spec.Input.Value != nil {
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  "INPUT_VALUE",
-				Value: *agent.Spec.Input.Value,
-			})
-		}
-		if agent.Spec.Input.Path != nil {
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  "INPUT_PATH",
-				Value: *agent.Spec.Input.Path,
-			})
-		}
-	}
-
-	return envVars
 }
 
 func labelsForAgent(name string) map[string]string {
@@ -259,7 +212,7 @@ func labelsForAgent(name string) map[string]string {
 func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.Agent{}).
-		Owns(&appsv1.StatefulSet{}).
+		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Complete(r)
 }
