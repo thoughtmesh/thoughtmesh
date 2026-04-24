@@ -1,125 +1,103 @@
 # ThoughtMesh
 
-> Your cluster, now thinking.
+> Kubernetes-native orchestration for autonomous AI agents.
 
-ThoughtMesh is a Kubernetes-native agent orchestration framework. Define autonomous AI agents as custom resources, let the operator handle the rest — lifecycle management, shared memory, inter-agent messaging, and Slack integration — all from within your cluster.
+ThoughtMesh is a Kubernetes operator that manages AI agents as native cluster resources. Each agent runs as a `StatefulSet` with a stable DNS name, a declarative spec, and an agentic loop powered by [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent).
 
----
-
-## Overview
-
-ThoughtMesh brings autonomous agent orchestration to Kubernetes. Agents are first-class resources: define an objective, a set of tasks, and an ending condition, and the operator spins up a stateful agentic loop with access to tools, shared memory, and inter-agent messaging.
-
-Everything is managed declaratively with `kubectl`. No separate control plane. No external orchestrator. Just Kubernetes.
+> **Status:** Phase 0 — Early Development (`core.thoughtmesh.dev/v1alpha1`)
 
 ---
 
-## Features
+## How it works
 
-- **Declarative agents** — define objectives, tasks, and stopping conditions as Kubernetes CRDs
-- **Stateful agentic loop** — each agent runs as a StatefulSet with its own service and message queue
-- **Shared memory** — attach a `Memory` resource to one or more agents for collaborative, persistent context
-- **Inter-agent messaging** — agents have awareness of each other and can send messages directly via the operator
-- **Slack integration** — message an agent from Slack; it picks it up at the next task boundary
-- **Built-in tools** — `read`, `write`, `bash`, `todo`, `message`
-- **Flexible ending conditions** — natural language, max turns, timeout, or any combination
-
----
-
-## Concepts
-
-### Agent
-
-The core resource. An `Agent` defines what to do, how to do it, and when to stop.
+When you apply an `Agent` manifest, the operator reconciles it into a `Deployment` and a headless `Service`. The agent container runs the agentic loop autonomously based on its `objective` and `system`. When the `termination` is satisfied the Agent is terminated.
 
 ```yaml
-apiVersion: goas.io/v1alpha1
+apiVersion: core.thoughtmesh.dev/v1alpha1
 kind: Agent
 metadata:
-  name: research-agent
+  name: my-agent
+  namespace: default
 spec:
-  objective: "Research the latest papers on distributed systems and write a summary"
-  tasks:
-    - description: "Search for papers published in the last 6 months"
-      priority: 1
-    - description: "Write a structured summary and save it to output"
-      priority: 2
-  endingCondition:
-    natural: "when the summary has been written and saved"
-    maxTurns: 50
-    timeoutSeconds: 3600
-  tools: [read, write, bash, todo, message]
-  output:
-    type: file
-    path: "/data/summary.md"
-```
-
-### Memory
-
-A shared, persistent memory volume that can be attached to one or more agents.
-
-```yaml
-apiVersion: goas.io/v1alpha1
-kind: Memory
-metadata:
-  name: shared-research-memory
-spec:
-  storageSize: 10Gi
-  accessMode: ReadWriteMany
-  description: "Shared knowledge base for research agents"
-  agents:
-    - research-agent
-    - synthesis-agent
+  objective: "Summarise all open GitHub issues daily"
+  system: "You are a concise technical writer."
+  termination: "All issues have been summarised."
 ```
 
 ---
 
-## How It Works
+## Prerequisites
 
-1. You apply an `Agent` CRD to your cluster
-2. The ThoughtMesh operator creates a `StatefulSet` running the `goas-agent` image, a `Service`, and a message queue
-3. The agent starts its agentic loop — reasoning over its objective, executing tasks using its tools, and evaluating its ending condition each turn
-4. Messages from other agents or from Slack are enqueued and consumed at task boundaries (non-preemptive by default)
-5. When an ending condition is met, the agent updates its status and shuts down gracefully
-
----
-
-## Messaging
-
-Agents are aware of each other by Kubernetes name. The `message` tool lets an agent send a message directly to another agent — the operator routes it to the target's queue.
-
-```
-agent-a  →  message("agent-b", "here are the results")
-         →  operator enqueues in agent-b's queue
-         →  agent-b picks it up at next task boundary
-```
-
-Slack messages directed at an agent (via `@mention` or channel mapping) are treated the same way.
+- Kubernetes cluster (v1.25+)
+- `kubectl` configured
+- Docker (for building images)
+- Go 1.26.2+
+- Node.js 22+ (for pi-coding-agent)
 
 ---
 
-## Status
+## Getting started
 
-Every agent exposes a rich status you can inspect with `kubectl`:
+```bash
+# Clone the repo
+git clone https://github.com/your-org/thoughtmesh
+cd thoughtmesh
+
+# Install CRDs
+make install
+
+# Build and push the agent image
+make docker-build-agent
+
+# Deploy the operator
+make deploy
+
+# Apply an Agent resource
+kubectl apply -f config/samples/core_v1alpha1_agent.yaml
+```
+
+---
+
+## Agent status
 
 ```bash
 kubectl get agents
+kubectl describe agent my-agent
 ```
 
-```
-NAME              PHASE     TURN   CURRENT TASK                        AGE
-research-agent    Running   12     Search for papers                   4m
-synthesis-agent   Pending   0      -                                   1m
+The `status` subresource exposes:
+
+| Field          | Description                        |
+|----------------|------------------------------------|
+| `phase`        | `Pending`, `Running`, `Succeeded`, `Failed` |
+
+---
+
+## Development
+
+```bash
+# Run the operator locally (outside the cluster)
+make run
+
+# Run tests
+make test
+
+# Regenerate manifests after CRD changes
+make generate && make manifests
 ```
 
 ---
 
 ## Roadmap
 
-- [ ] Skills as CRDs — attach reusable capabilities to agents
-- [ ] Agent-to-agent task delegation
-- [ ] Web UI for observability
-- [ ] Multi-namespace agent discovery
+| Phase | Name | Status |
+|-------|------|--------|
+| 0 | Core Agent Operator | 🟡 In progress |
+| 1 | Messaging & Discovery | Planned |
+| 1.1 | Slack Integration | Planned |
+| 2 | Skills as Kubernetes Resources | Planned |
+| 3 | Observability | Planned |
+| 4 | Agent-managed Agents | Exploratory |
 
 ---
 
