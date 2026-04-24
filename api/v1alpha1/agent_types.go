@@ -31,8 +31,8 @@ type AgentSpec struct {
 	Tasks []Task `json:"tasks,omitempty"`
 
 	// EndingCondition defines when the agent should stop
-	// +kubebuilder:validation:Required
-	EndingCondition EndingCondition `json:"endingCondition"`
+	// +optional
+	EndingCondition *EndingCondition `json:"endingCondition"`
 
 	// Input defines the input data for the agent
 	// +optional
@@ -45,11 +45,6 @@ type AgentSpec struct {
 	// Memory is a reference to a Memory resource to attach to this agent
 	// +optional
 	Memory *MemoryRef `json:"memory,omitempty"`
-
-	// Tools is the list of tools available to the agent
-	// +optional
-	// +kubebuilder:default={"read","write","bash","todo","message"}
-	Tools []Tool `json:"tools,omitempty"`
 }
 
 // Task defines a unit of work for the agent
@@ -110,18 +105,6 @@ type MemoryRef struct {
 	// +kubebuilder:validation:Required
 	Ref string `json:"ref"`
 }
-
-// Tool represents an available tool for the agent
-// +kubebuilder:validation:Enum=read;write;bash;todo;message
-type Tool string
-
-const (
-	ToolRead    Tool = "read"
-	ToolWrite   Tool = "write"
-	ToolBash    Tool = "bash"
-	ToolTodo    Tool = "todo"
-	ToolMessage Tool = "message"
-)
 
 // AgentPhase represents the lifecycle phase of an Agent
 type AgentPhase string
