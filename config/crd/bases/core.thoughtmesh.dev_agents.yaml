@@ -39,31 +39,18 @@ spec:
           spec:
             description: spec defines the desired state of Agent
             properties:
-              endingCondition:
-                description: EndingCondition defines when the agent should stop
-                properties:
-                  maxTurns:
-                    description: MaxTurns is the maximum number of turns before the
-                      agent stops
-                    format: int32
-                    minimum: 1
-                    type: integer
-                  natural:
-                    description: Natural is an LLM-evaluated natural language stopping
-                      condition
-                    type: string
-                  timeoutSeconds:
-                    description: TimeoutSeconds is the maximum time in seconds before
-                      the agent stops
-                    format: int32
-                    minimum: 1
-                    type: integer
-                type: object
               objective:
                 description: Objective is the high-level goal of the agent
                 type: string
+              system:
+                description: System is the custom system prompt for the agent
+                type: string
+              termination:
+                description: Termination defines when the agent should stop
+                type: string
             required:
             - objective
+            - termination
             type: object
           status:
             description: status defines the observed state of Agent
@@ -72,23 +59,10 @@ spec:
                 description: Phase is the current lifecycle phase of the agent
                 enum:
                 - Pending
-                - Running
-                - Paused
+                - Working
+                - Waiting
                 - Succeeded
                 - Failed
-                type: string
-              startTime:
-                description: StartTime is when the agent started running
-                format: date-time
-                type: string
-              terminationReason:
-                description: TerminationReason explains why the agent stopped
-                enum:
-                - NaturalConditionMet
-                - MaxTurnsReached
-                - TimedOut
-                - Error
-                - Stopped
                 type: string
             type: object
         required:

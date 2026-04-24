@@ -26,54 +26,32 @@ type AgentSpec struct {
 	// +kubebuilder:validation:Required
 	Objective string `json:"objective"`
 
-	// EndingCondition defines when the agent should stop
+	// System is the custom system prompt for the agent
 	// +optional
-	EndingCondition *EndingCondition `json:"endingCondition"`
-}
+	System *string `json:"system"`
 
-// EndingCondition defines one or more conditions that will stop the agent
-type EndingCondition struct {
-	// Natural is an LLM-evaluated natural language stopping condition
-	// +optional
-	Natural *string `json:"natural,omitempty"`
-
-	// MaxTurns is the maximum number of turns before the agent stops
-	// +optional
-	// +kubebuilder:validation:Minimum=1
-	MaxTurns *int32 `json:"maxTurns,omitempty"`
-
-	// TimeoutSeconds is the maximum time in seconds before the agent stops
-	// +optional
-	// +kubebuilder:validation:Minimum=1
-	TimeoutSeconds *int32 `json:"timeoutSeconds,omitempty"`
+	// Termination defines when the agent should stop
+	// +kubebuilder:validation:Required
+	Termination string `json:"termination"`
 }
 
 // AgentPhase represents the lifecycle phase of an Agent
 type AgentPhase string
 
 const (
-	AgentPhasePending   AgentPhase = "Pending"
-	AgentPhaseRunning   AgentPhase = "Running"
-	AgentPhasePaused    AgentPhase = "Paused"
-	AgentPhaseSucceeded AgentPhase = "Succeeded"
-	AgentPhaseFailed    AgentPhase = "Failed"
+	AgentPhasePending   AgentPhase = "Pending"   // just created
+	AgentPhaseWorking   AgentPhase = "Working"   // generating tokens
+	AgentPhaseWaiting   AgentPhase = "Waiting"   // waiting input from user
+	AgentPhaseSucceeded AgentPhase = "Succeeded" // succeeded
+	AgentPhaseFailed    AgentPhase = "Failed"    // failed
 )
 
 // AgentStatus defines the observed state of Agent.
 type AgentStatus struct {
 	// Phase is the current lifecycle phase of the agent
-	// +kubebuilder:validation:Enum=Pending;Running;Paused;Succeeded;Failed
+	// +kubebuilder:validation:Enum=Pending;Working;Waiting;Succeeded;Failed
 	// +optional
 	Phase AgentPhase `json:"phase,omitempty"`
-
-	// StartTime is when the agent started running
-	// +optional
-	StartTime *metav1.Time `json:"startTime,omitempty"`
-
-	// TerminationReason explains why the agent stopped
-	// +kubebuilder:validation:Enum=NaturalConditionMet;MaxTurnsReached;TimedOut;Error;Stopped
-	// +optional
-	TerminationReason string `json:"terminationReason,omitempty"`
 }
 
 // +kubebuilder:object:root=true
