@@ -32,7 +32,9 @@ import (
 	corev1alpha1 "github.com/thoughtmesh/thoughtmesh/api/v1alpha1"
 )
 
-const TMAgentImage = "ghcr.io/thoughtmesh/thoughtmesh/thoughtmesh-agent:main"
+// agentVersion is set at build time via -ldflags.
+// Default is "dev" if not set.
+var agentVersion = "dev"
 
 // AgentReconciler reconciles an Agent object
 type AgentReconciler struct {
@@ -153,7 +155,7 @@ func (r *AgentReconciler) buildDeployment(agent *corev1alpha1.Agent) *appsv1.Dep
 					Containers: []corev1.Container{
 						{
 							Name:  "agent",
-							Image: TMAgentImage,
+							Image: getAgentImage(),
 							Env:   r.buildEnvVars(agent),
 						},
 					},
@@ -206,6 +208,12 @@ func labelsForAgent(name string) map[string]string {
 		"app.kubernetes.io/instance":   name,
 		"app.kubernetes.io/managed-by": "thoughtmesh",
 	}
+}
+
+// getAgentImage returns the full image tag including version.
+// Version is injected at build time via -ldflags.
+func getAgentImage() string {
+	return "ghcr.io/thoughtmesh/thoughtmesh/thoughtmesh-agent:" + agentVersion
 }
 
 // SetupWithManager sets up the controller with the Manager.

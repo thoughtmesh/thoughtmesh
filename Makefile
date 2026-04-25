@@ -2,6 +2,16 @@
 MANAGER_IMG ?= thoughtmesh-manager:latest
 AGENT_IMG ?= thoughtmesh-agent:latest
 
+# Version: try git tag, then git branch, fallback to "dev"
+VERSION := $(shell \
+    if TAG=$$(git describe --tags --abbrev=0 2>/dev/null) && [ -n "$$TAG" ]; then \
+        echo "$$TAG"; \
+    elif BRANCH=$$(git rev-parse --abbrev-ref HEAD 2>/dev/null) && [ -n "$$BRANCH" ]; then \
+        echo "$$BRANCH"; \
+    else \
+        echo "dev"; \
+    fi)
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -134,7 +144,7 @@ docker-push-manager: ## Push docker image with the manager.
 
 .PHONY: docker-build-agent
 docker-build-agent: ## Build docker image with the agent.
-	$(CONTAINER_TOOL) build -f Dockerfile.agent -t ${AGENT_IMG} .
+	$(CONTAINER_TOOL) build -f Dockerfile.agent -t ${AGENT_IMG} --build-arg VERSION=${VERSION} .
 
 .PHONY: docker-push-agent
 docker-push-agent: ## Push docker image with the agent.
