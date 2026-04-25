@@ -103,4 +103,4 @@ make generate && make manifests
 
 ## License
 
-MIT
+Apache 2.0
