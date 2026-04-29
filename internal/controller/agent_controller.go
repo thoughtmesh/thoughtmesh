@@ -41,7 +41,7 @@ import (
 
 const (
 	agentFinalizerName   = "thoughtmesh.dev/agent-protection"
-	defaultRuntimeImage  = "ghcr.io/ufukbombar/thoughtmesh-runtime:latest"
+	defaultRuntimeImage  = "ghcr.io/thoughtmesh/thoughtmesh-runtime:latest"
 	retryCountAnnotation = "thoughtmesh.dev/retry-count"
 )
 
@@ -385,6 +385,7 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 							Image:   spec.Image,
 							Env:     envVars,
 							EnvFrom: envFrom,
+							Command: []string{"/thoughtmesh/runtime"},
 						},
 					},
 				},
