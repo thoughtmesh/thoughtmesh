@@ -14,7 +14,15 @@ spec:
     singular: agenttemplate
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.objective
+      name: Objective
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: AgentTemplate is the Schema for the agenttemplates API
@@ -39,10 +47,183 @@ spec:
           spec:
             description: spec defines the desired state of AgentTemplate
             properties:
-              foo:
-                description: foo is an example field of AgentTemplate. Edit agenttemplate_types.go
-                  to remove/update
+              context:
+                description: context declares Kubernetes-native config and credential
+                  sources
+                properties:
+                  configMapRefs:
+                    description: |-
+                      configMapRefs is an ordered list of ConfigMaps mounted as env vars.
+                      Later entries overwrite conflicting keys from earlier ones.
+                    items:
+                      type: string
+                    type: array
+                  secretRefs:
+                    description: |-
+                      secretRefs is an ordered list of Secrets mounted as env vars.
+                      Later entries overwrite conflicting keys from earlier ones.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              image:
+                description: |-
+                  image is the container image for the agent Pod.
+                  Omit to use the ThoughtMesh default runtime image.
                 type: string
+              lifecycle:
+                description: lifecycle defines retry and completion policies
+                properties:
+                  completion:
+                    description: completion defines completion conditions and Pod
+                      disposition
+                    properties:
+                      condition:
+                        description: condition defines when the agent is considered
+                          done
+                        enum:
+                        - objective-achieved
+                        - max-steps
+                        - timeout
+                        type: string
+                      onFailure:
+                        default: retain
+                        description: onFailure defines Pod disposition after failure
+                        enum:
+                        - delete
+                        - retain
+                        - archive
+                        type: string
+                      onSuccess:
+                        default: retain
+                        description: onSuccess defines Pod disposition after success
+                        enum:
+                        - delete
+                        - retain
+                        - archive
+                        type: string
+                    required:
+                    - condition
+                    type: object
+                  retryPolicy:
+                    description: retryPolicy defines retry behavior on failure
+                    properties:
+                      backoffSeconds:
+                        description: backoffSeconds is the delay in seconds before
+                          retrying
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      maxRetries:
+                        description: maxRetries is the maximum number of retry attempts
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
+                required:
+                - completion
+                type: object
+              limits:
+                description: limits defines resource and time constraints for the
+                  agent
+                properties:
+                  timeout:
+                    description: |-
+                      timeout is the hard time limit in Go duration format (e.g. 5m, 30s, 1h).
+                      Agent is killed if exceeded.
+                    pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                    type: string
+                required:
+                - timeout
+                type: object
+              model:
+                description: model is the role-based model configuration
+                properties:
+                  worker:
+                    description: worker defines the model configuration for the worker
+                      role
+                    properties:
+                      apiName:
+                        description: apiName is the model API identifier (e.g. claude-sonnet-4-20250514,
+                          gpt-4o, llama3.3)
+                        type: string
+                      endpoint:
+                        description: |-
+                          endpoint is the custom endpoint URL. Omit to use the provider default.
+                          Required for Ollama and Azure OpenAI.
+                        type: string
+                      params:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          params is a free-form map for provider-specific parameters (e.g. top_p, top_k).
+                          Values are passed through to the provider client as-is.
+                        type: object
+                      provider:
+                        description: provider is the LLM provider name (e.g. anthropic,
+                          openai, ollama, vertex, azure-openai, mistral)
+                        enum:
+                        - anthropic
+                        - openai
+                        - ollama
+                        - vertex
+                        - azure-openai
+                        - mistral
+                        type: string
+                      systemPrompt:
+                        description: |-
+                          systemPrompt overrides the base system prompt injected by the ThoughtMesh runtime.
+                          Omit to use the default.
+                        type: string
+                      temperature:
+                        default: "0.2"
+                        description: |-
+                          temperature is the sampling temperature (0.0–1.0). Lower values are more deterministic.
+                          Stored as string to comply with Kubernetes API conventions.
+                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
+                        type: string
+                    required:
+                    - apiName
+                    - provider
+                    type: object
+                required:
+                - worker
+                type: object
+              objective:
+                description: objective is the plain-language goal for the agent. One
+                  task, one goal.
+                minLength: 1
+                type: string
+              tools:
+                description: tools is the list of MCP servers available to the agent
+                items:
+                  description: Tool defines an MCP server available to the agent
+                  properties:
+                    name:
+                      description: name is the tool identifier
+                      minLength: 1
+                      type: string
+                    type:
+                      description: type is the tool type (currently only "mcp" is
+                        supported)
+                      enum:
+                      - mcp
+                      type: string
+                    url:
+                      description: url is the MCP server URL
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  - type
+                  - url
+                  type: object
+                type: array
+            required:
+            - lifecycle
+            - limits
+            - model
+            - objective
             type: object
           status:
             description: status defines the observed state of AgentTemplate
