@@ -23,16 +23,16 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// ModelRoleConfig defines the configuration for a specific model role
-type ModelRoleConfig struct {
+// WorkerModelRoleConfig defines the configuration for a worker model role
+type WorkerModelRoleConfig struct {
 	// provider is the LLM provider name (e.g. anthropic, openai, ollama, vertex, azure-openai, mistral)
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=anthropic;openai;ollama;vertex;azure-openai;mistral
 	Provider string `json:"provider"`
 
-	// apiName is the model API identifier (e.g. claude-sonnet-4-20250514, gpt-4o, llama3.3)
+	// apiName is the model name identifier (e.g. claude-sonnet-4-20250514, gpt-4o, llama3.3)
 	// +kubebuilder:validation:Required
-	APIName string `json:"apiName"`
+	ModelName string `json:"apiName"`
 
 	// endpoint is the custom endpoint URL. Omit to use the provider default.
 	// Required for Ollama and Azure OpenAI.
@@ -61,7 +61,7 @@ type ModelRoleConfig struct {
 type ModelConfig struct {
 	// worker defines the model configuration for the worker role
 	// +kubebuilder:validation:Required
-	Worker ModelRoleConfig `json:"worker"`
+	Worker WorkerModelRoleConfig `json:"worker"`
 }
 
 // Tool defines an MCP server available to the agent

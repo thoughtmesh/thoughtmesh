@@ -144,7 +144,7 @@ spec:
                       role
                     properties:
                       apiName:
-                        description: apiName is the model API identifier (e.g. claude-sonnet-4-20250514,
+                        description: apiName is the model name identifier (e.g. claude-sonnet-4-20250514,
                           gpt-4o, llama3.3)
                         type: string
                       endpoint:
