@@ -1,16 +1,5 @@
 # Image URL to use all building/pushing image targets
-MANAGER_IMG ?= thoughtmesh-manager:latest
-AGENT_IMG ?= thoughtmesh-agent:latest
-
-# Version: try git tag, then git branch, fallback to "dev"
-VERSION := $(shell \
-    if TAG=$$(git describe --tags --abbrev=0 2>/dev/null) && [ -n "$$TAG" ]; then \
-        echo "$$TAG"; \
-    elif BRANCH=$$(git rev-parse --abbrev-ref HEAD 2>/dev/null) && [ -n "$$BRANCH" ]; then \
-        echo "$$BRANCH"; \
-    else \
-        echo "dev"; \
-    fi)
+IMG ?= controller:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -31,7 +20,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 .PHONY: all
-all: build-manager build-agent
+all: build
 
 ##@ General
 
@@ -48,7 +37,7 @@ all: build-manager build-agent
 
 .PHONY: help
 help: ## Display this help.
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-21s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Development
 
@@ -115,62 +104,46 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 
-.PHONY: build-manager
-build-manager: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager ./cmd/manager/main.go
-
-.PHONY: run-manager
-run-manager: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/manager/main.go
-
-.PHONY: build-agent
-build-agent: manifests generate fmt vet ## Build agent binary.
-	go build -o bin/agent ./cmd/agent/main.go
+.PHONY: build
+build: manifests generate fmt vet ## Build manager binary.
+	go build -o bin/manager cmd/main.go
 
 .PHONY: run
-run-agent: manifests generate fmt vet ## Run the agent from your host.
-	go run ./cmd/agent/main.go
+run: manifests generate fmt vet ## Run a controller from your host.
+	go run ./cmd/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-.PHONY: docker-build-manager
-docker-build-manager: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -f Dockerfile.manager -t ${MANAGER_IMG} .
+.PHONY: docker-build
+docker-build: ## Build docker image with the manager.
+	$(CONTAINER_TOOL) build -t ${IMG} .
 
-.PHONY: docker-push-manager
-docker-push-manager: ## Push docker image with the manager.
-	$(CONTAINER_TOOL) push ${MANAGER_IMG}
-
-.PHONY: docker-build-agent
-docker-build-agent: ## Build docker image with the agent.
-	$(CONTAINER_TOOL) build -f Dockerfile.agent -t ${AGENT_IMG} --build-arg VERSION=${VERSION} .
-
-.PHONY: docker-push-agent
-docker-push-agent: ## Push docker image with the agent.
-	$(CONTAINER_TOOL) push ${AGENT_IMG}
+.PHONY: docker-push
+docker-push: ## Push docker image with the manager.
+	$(CONTAINER_TOOL) push ${IMG}
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
-# architectures. (i.e. make docker-buildx MANAGER_IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
+# architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
 # - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-# - be able to push the image to your registry (i.e. if you do not set a valid value via MANAGER_IMG=<myregistry/image:<tag>> then the export will fail)
+# - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-.PHONY: docker-buildx-manager
-docker-buildx-manager: ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile.manager and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile.manager > Dockerfile.cross
+.PHONY: docker-buildx
+docker-buildx: ## Build and push docker image for the manager for cross-platform support
+	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name thoughtmesh-builder
 	$(CONTAINER_TOOL) buildx use thoughtmesh-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${MANAGER_IMG} -f Dockerfile.manager.cross .
+	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
 	- $(CONTAINER_TOOL) buildx rm thoughtmesh-builder
-	rm Dockerfile.manager.cross
+	rm Dockerfile.cross
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${MANAGER_IMG}
+	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
 	"$(KUSTOMIZE)" build config/default > dist/install.yaml
 
 ##@ Deployment
@@ -191,7 +164,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${MANAGER_IMG}
+	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
 	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
