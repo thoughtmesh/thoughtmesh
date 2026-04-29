@@ -40,11 +40,11 @@ type ModelRoleConfig struct {
 	Endpoint string `json:"endpoint,omitempty"`
 
 	// temperature is the sampling temperature (0.0–1.0). Lower values are more deterministic.
-	// +kubebuilder:validation:Minimum=0.0
-	// +kubebuilder:validation:Maximum=1.0
-	// +kubebuilder:default=0.2
+	// Stored as string to comply with Kubernetes API conventions.
+	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
+	// +kubebuilder:default="0.2"
 	// +optional
-	Temperature *float64 `json:"temperature,omitempty"`
+	Temperature string `json:"temperature,omitempty"`
 
 	// systemPrompt overrides the base system prompt injected by the ThoughtMesh runtime.
 	// Omit to use the default.
