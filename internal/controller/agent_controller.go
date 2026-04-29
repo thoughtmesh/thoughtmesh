@@ -359,6 +359,8 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 		}
 	}
 
+	var zero int32 = 0
+
 	// Create Job spec
 	jobName := fmt.Sprintf("%s-job", agent.Name)
 	job := &batchv1.Job{
@@ -370,6 +372,7 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 			},
 		},
 		Spec: batchv1.JobSpec{
+			BackoffLimit:          &zero,
 			ActiveDeadlineSeconds: &activeDeadlineSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -658,19 +661,6 @@ func (r *AgentReconciler) setCondition(agent *corev1alpha1.Agent, condition meta
 	meta.SetStatusCondition(&agent.Status.Conditions, condition)
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.Agent{}).
-		Owns(&batchv1.Job{}).
-		Watches(
-			&corev1alpha1.AgentTemplate{},
-			handler.EnqueueRequestsFromMapFunc(r.findAgentsForTemplate),
-		).
-		Named("agent").
-		Complete(r)
-}
-
 // findAgentsForTemplate finds all Agents that reference an AgentTemplate
 func (r *AgentReconciler) findAgentsForTemplate(ctx context.Context, template client.Object) []reconcile.Request {
 	agentList := &corev1alpha1.AgentList{}
@@ -690,4 +680,17 @@ func (r *AgentReconciler) findAgentsForTemplate(ctx context.Context, template cl
 		}
 	}
 	return requests
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&corev1alpha1.Agent{}).
+		Owns(&batchv1.Job{}).
+		Watches(
+			&corev1alpha1.AgentTemplate{},
+			handler.EnqueueRequestsFromMapFunc(r.findAgentsForTemplate),
+		).
+		Named("agent").
+		Complete(r)
 }
