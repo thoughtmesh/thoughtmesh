@@ -85,11 +85,6 @@ func (r *AgentTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			log.Error(err, "Failed to add finalizer to AgentTemplate")
 			return ctrl.Result{}, err
 		}
-		// Re-fetch after update
-		if err := r.Get(ctx, req.NamespacedName, agentTemplate); err != nil {
-			log.Error(err, "Failed to re-fetch AgentTemplate after adding finalizer")
-			return ctrl.Result{}, err
-		}
 	}
 
 	// Handle deletion

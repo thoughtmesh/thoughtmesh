@@ -40,9 +40,9 @@ import (
 )
 
 const (
-	agentFinalizerName         = "thoughtmesh.dev/agent-protection"
-	defaultRuntimeImage        = "ghcr.io/ufukbombar/thoughtmesh-runtime:latest"
-	retryCountAnnotation       = "thoughtmesh.dev/retry-count"
+	agentFinalizerName   = "thoughtmesh.dev/agent-protection"
+	defaultRuntimeImage  = "ghcr.io/ufukbombar/thoughtmesh-runtime:latest"
+	retryCountAnnotation = "thoughtmesh.dev/retry-count"
 )
 
 // ResolvedAgentSpec contains the final merged spec to be used for Job creation
@@ -127,7 +127,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	job := &batchv1.Job{}
 	jobName := fmt.Sprintf("%s-job", agent.Name)
 	err = r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: agent.Namespace}, job)
-	
+
 	if err != nil && apierrors.IsNotFound(err) {
 		// Create new Job
 		job, err = r.createJob(ctx, agent, resolvedSpec)
@@ -157,7 +157,7 @@ func (r *AgentReconciler) handleDeletion(ctx context.Context, agent *corev1alpha
 	jobName := fmt.Sprintf("%s-job", agent.Name)
 	job := &batchv1.Job{}
 	err := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: agent.Namespace}, job)
-	
+
 	if err == nil {
 		// Job exists, delete it
 		log.Info("Deleting owned Job")
@@ -431,7 +431,7 @@ func (r *AgentReconciler) syncJobStatus(ctx context.Context, agent *corev1alpha1
 
 	// Determine phase from Job status
 	previousPhase := agent.Status.Phase
-	
+
 	if job.Status.Active > 0 {
 		agent.Status.Phase = "Running"
 	} else if job.Status.Succeeded > 0 {
@@ -551,16 +551,16 @@ func (r *AgentReconciler) handleFailure(ctx context.Context, agent *corev1alpha1
 	if retryCount < maxRetries {
 		// Retry
 		log.Info("Retrying Agent", "retryCount", retryCount+1, "maxRetries", maxRetries)
-		
+
 		// Update retry count
 		if agent.Annotations == nil {
 			agent.Annotations = make(map[string]string)
 		}
 		agent.Annotations[retryCountAnnotation] = fmt.Sprintf("%d", retryCount+1)
-		
+
 		// Set phase to Retrying
 		agent.Status.Phase = "Retrying"
-		
+
 		if err := r.Update(ctx, agent); err != nil {
 			log.Error(err, "Failed to update Agent annotations")
 			return ctrl.Result{}, err
@@ -583,7 +583,7 @@ func (r *AgentReconciler) handleFailure(ctx context.Context, agent *corev1alpha1
 
 	// Retries exhausted
 	log.Info("Retries exhausted")
-	
+
 	r.setCondition(agent, metav1.Condition{
 		Type:               "ObjectiveAchieved",
 		Status:             metav1.ConditionFalse,
