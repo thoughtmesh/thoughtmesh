@@ -6,42 +6,45 @@ A Kubernetes-native orchestrator for short-running, single-objective AI agents.
 
 ## How It Works
 
-1. Define an **`AgentTemplate`** — the reusable spec describing what an agent does.
-2. Create an **`Agent`** referencing it — the operator spawns a Kubernetes Job and runs the agent.
-3. The `Agent` object records the result, status, and runtime metrics when done.
+1. Create an **`Agent`** — the operator spawns a Kubernetes Job and runs the agent.
+2. The `Agent` object records the result, status, and runtime metrics when done.
 
 ```
-AgentTemplate   →   Agent   →   Job   →   Pod
-  (definition)     (instance)  (k8s)   (runtime)
+Agent   →   Job   →   Pod
+(spec)     (k8s)   (runtime)
 ```
 
 ---
 
-## AgentTemplate
+## Agent
 
-A reusable definition. Never runs by itself.
+An AI agent that executes a single objective.
 
 ```yaml
-apiVersion: thoughtmesh.io/v1alpha1
-kind: AgentTemplate
+apiVersion: core.thoughtmesh.dev/v1alpha1
+kind: Agent
 metadata:
   name: summarize-incidents
   namespace: production
 spec:
-  image: ghcr.io/ufukbombar/thoughtmesh-runtime:latest  # omit to use ThoughtMesh default
-
   objective: |
     Summarize all PagerDuty incidents from the last 24 hours
     and post a digest to the #ops-digest Slack channel.
+  
+  keyResults:
+    - "Generate digest with incident summaries"
+    - "Post to #ops-digest Slack channel"
 
   model:
     worker:
       provider: anthropic
       apiName: claude-sonnet-4-20250514
       endpoint: ""              # omit for provider default
-      temperature: 0.2
+      temperature: "0.2"
       systemPrompt: ""          # omit for ThoughtMesh default
       params: {}                # optional provider-specific parameters
+
+  image: ghcr.io/ufukbombar/thoughtmesh-runtime:latest  # omit to use ThoughtMesh default
 
   tools:
     - name: pagerduty-mcp
@@ -68,7 +71,6 @@ spec:
       maxRetries: 2
       backoffSeconds: 30
     completion:
-      condition: objective-achieved   # objective-achieved | max-steps | timeout
       onSuccess: delete               # delete | retain | archive
       onFailure: retain
 ```
@@ -78,14 +80,14 @@ spec:
 | Field | Required | Description |
 |---|---|---|
 | `objective` | yes | Plain-language goal for the agent. One task, one goal. |
+| `keyResults` | no | List of measurable outcomes that indicate objective completion. |
 | `model` | yes | Role-based model configuration. See [Model](#model). |
 | `image` | no | Container image for the agent Pod. Omit to use the ThoughtMesh default runtime image. |
 | `tools` | no | MCP servers available to the agent. |
 | `context.configMapRefs` | no | Ordered list of ConfigMaps mounted as env vars. Later entries overwrite conflicting keys. |
 | `context.secretRefs` | no | Ordered list of Secrets mounted as env vars. Later entries overwrite conflicting keys. |
-| `limits.timeout` | yes | Hard time limit in Go duration format (e.g. `5m`, `30s`, `1h`). Agent is killed if exceeded. |
+| `limits.timeout` | no | Hard time limit in Go duration format (e.g. `5m`, `30s`, `1h`). If not specified, agent runs without timeout. |
 | `lifecycle.retryPolicy` | no | Retry on failure with backoff. |
-| `lifecycle.completion.condition` | yes | When the agent is considered done. |
 | `lifecycle.completion.onSuccess` | no | Pod disposition after success. Default: `retain`. |
 | `lifecycle.completion.onFailure` | no | Pod disposition after failure. Default: `retain`. |
 
@@ -134,7 +136,7 @@ model:
 
 ## Context
 
-`context` declares the Kubernetes-native config and credential sources the operator mounts into the agent Pod at spawn time. Values never appear in the `AgentTemplate` spec itself.
+`context` declares the Kubernetes-native config and credential sources the operator mounts into the agent Pod at spawn time. Values never appear in the `Agent` spec itself.
 
 Both fields accept an ordered list. Keys are applied in order — later entries overwrite conflicting keys from earlier ones. Place general configs first, specific ones last.
 
@@ -165,38 +167,7 @@ The agent runtime reads these as standard environment variables (`$ENVIRONMENT`,
 
 ---
 
-## Agent
-
-An instance of an `AgentTemplate`. Creating one triggers the operator to spawn the Job.
-
-```yaml
-apiVersion: thoughtmesh.io/v1alpha1
-kind: Agent
-metadata:
-  name: summarize-incidents-2026-04-29
-  namespace: production
-spec:
-  templateRef:
-    name: summarize-incidents
-
-  # Optional: override fields from the AgentTemplate for this run
-  overrides:
-    model:
-      worker:
-        apiName: claude-opus-4-20250514
-        temperature: 0.5
-    limits:
-      timeout: 10m
-```
-
-### Fields
-
-| Field | Required | Description |
-|---|---|---|
-| `templateRef.name` | yes | Name of the `AgentTemplate` to run. |
-| `overrides` | no | Selectively override any `AgentTemplate` field for this run. |
-
-### Status
+## Status
 
 The operator updates `Agent.status` throughout the run.
 
@@ -218,5 +189,5 @@ status:
 
 - **Short-running.** Agents complete and terminate. They are not services.
 - **Single objective.** One goal per agent. Split complexity across multiple `Agent` runs.
-- **Safe by default.** `limits.timeout` is a required field. Constraints are not opt-in.
+- **Simple and direct.** Single CRD with all configuration inline. No templates or overrides.
 - **Kubernetes-native.** Works with existing RBAC, namespacing, and resource quotas.
