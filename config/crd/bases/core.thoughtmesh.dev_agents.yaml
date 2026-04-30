@@ -49,173 +49,173 @@ spec:
           spec:
             description: spec defines the desired state of Agent
             properties:
-              overrides:
-                description: overrides allows selectively overriding any AgentTemplate
-                  field for this run
+              context:
+                description: context declares Kubernetes-native config and credential
+                  sources
                 properties:
-                  context:
-                    description: context overrides the context configuration
-                    properties:
-                      configMapRefs:
-                        description: |-
-                          configMapRefs is an ordered list of ConfigMaps mounted as env vars.
-                          Later entries overwrite conflicting keys from earlier ones.
-                        items:
-                          type: string
-                        type: array
-                      secretRefs:
-                        description: |-
-                          secretRefs is an ordered list of Secrets mounted as env vars.
-                          Later entries overwrite conflicting keys from earlier ones.
-                        items:
-                          type: string
-                        type: array
-                    type: object
-                  image:
-                    description: image overrides the container image
-                    type: string
-                  lifecycle:
-                    description: lifecycle overrides the lifecycle configuration
-                    properties:
-                      completion:
-                        description: completion defines completion conditions and
-                          Pod disposition
-                        properties:
-                          onFailure:
-                            default: retain
-                            description: onFailure defines Pod disposition after failure
-                            enum:
-                            - delete
-                            - retain
-                            - archive
-                            type: string
-                          onSuccess:
-                            default: retain
-                            description: onSuccess defines Pod disposition after success
-                            enum:
-                            - delete
-                            - retain
-                            - archive
-                            type: string
-                        type: object
-                      retryPolicy:
-                        description: retryPolicy defines retry behavior on failure
-                        properties:
-                          backoffSeconds:
-                            description: backoffSeconds is the delay in seconds before
-                              retrying
-                            format: int32
-                            minimum: 0
-                            type: integer
-                          maxRetries:
-                            description: maxRetries is the maximum number of retry
-                              attempts
-                            format: int32
-                            minimum: 0
-                            type: integer
-                        type: object
-                    type: object
-                  limits:
-                    description: limits overrides the limits configuration
-                    properties:
-                      timeout:
-                        description: |-
-                          timeout is the hard time limit in Go duration format (e.g. 5m, 30s, 1h).
-                          Agent is killed if exceeded. If not specified, the agent runs without a timeout.
-                        pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
-                        type: string
-                    type: object
-                  model:
-                    description: model overrides the model configuration
-                    properties:
-                      worker:
-                        description: worker defines the model configuration for the
-                          worker role
-                        properties:
-                          endpoint:
-                            description: |-
-                              endpoint is the custom endpoint URL. Omit to use the provider default.
-                              Required for Ollama and Azure OpenAI.
-                            type: string
-                          modelName:
-                            description: apiName is the model name identifier (e.g.
-                              claude-sonnet-4-20250514, gpt-4o, llama3.3)
-                            type: string
-                          params:
-                            additionalProperties:
-                              type: string
-                            description: |-
-                              params is a free-form map for provider-specific parameters (e.g. top_p, top_k).
-                              Values are passed through to the provider client as-is.
-                            type: object
-                          provider:
-                            description: provider is the LLM provider name (e.g. anthropic,
-                              openai, ollama, vertex, azure-openai, mistral)
-                            enum:
-                            - anthropic
-                            - openai
-                            - ollama
-                            - vertex
-                            - azure-openai
-                            - mistral
-                            type: string
-                          systemPrompt:
-                            description: |-
-                              systemPrompt overrides the base system prompt injected by the ThoughtMesh runtime.
-                              Omit to use the default.
-                            type: string
-                          temperature:
-                            default: "0.2"
-                            description: |-
-                              temperature is the sampling temperature (0.0–1.0). Lower values are more deterministic.
-                              Stored as string to comply with Kubernetes API conventions.
-                            pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                            type: string
-                        required:
-                        - modelName
-                        - provider
-                        type: object
-                    required:
-                    - worker
-                    type: object
-                  tools:
-                    description: tools overrides the tools list
+                  configMapRefs:
+                    description: |-
+                      configMapRefs is an ordered list of ConfigMaps mounted as env vars.
+                      Later entries overwrite conflicting keys from earlier ones.
                     items:
-                      description: Tool defines an MCP server available to the agent
-                      properties:
-                        name:
-                          description: name is the tool identifier
-                          minLength: 1
-                          type: string
-                        type:
-                          description: type is the tool type (currently only "mcp"
-                            is supported)
-                          enum:
-                          - mcp
-                          type: string
-                        url:
-                          description: url is the MCP server URL
-                          minLength: 1
-                          type: string
-                      required:
-                      - name
-                      - type
-                      - url
-                      type: object
+                      type: string
+                    type: array
+                  secretRefs:
+                    description: |-
+                      secretRefs is an ordered list of Secrets mounted as env vars.
+                      Later entries overwrite conflicting keys from earlier ones.
+                    items:
+                      type: string
                     type: array
                 type: object
-              templateRef:
-                description: templateRef references the AgentTemplate to run
+              image:
+                description: |-
+                  image is the container image for the agent Pod.
+                  Omit to use the ThoughtMesh default runtime image.
+                type: string
+              keyResults:
+                description: keyResults is the list of measurable outcomes that indicate
+                  objective completion
+                items:
+                  type: string
+                type: array
+              lifecycle:
+                description: lifecycle defines retry and completion policies
                 properties:
-                  name:
-                    description: name is the name of the AgentTemplate to run
-                    minLength: 1
-                    type: string
-                required:
-                - name
+                  completion:
+                    description: completion defines completion conditions and Pod
+                      disposition
+                    properties:
+                      onFailure:
+                        default: retain
+                        description: onFailure defines Pod disposition after failure
+                        enum:
+                        - delete
+                        - retain
+                        - archive
+                        type: string
+                      onSuccess:
+                        default: retain
+                        description: onSuccess defines Pod disposition after success
+                        enum:
+                        - delete
+                        - retain
+                        - archive
+                        type: string
+                    type: object
+                  retryPolicy:
+                    description: retryPolicy defines retry behavior on failure
+                    properties:
+                      backoffSeconds:
+                        description: backoffSeconds is the delay in seconds before
+                          retrying
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      maxRetries:
+                        description: maxRetries is the maximum number of retry attempts
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
                 type: object
+              limits:
+                description: limits defines resource and time constraints for the
+                  agent
+                properties:
+                  timeout:
+                    description: |-
+                      timeout is the hard time limit in Go duration format (e.g. 5m, 30s, 1h).
+                      Agent is killed if exceeded. If not specified, the agent runs without a timeout.
+                    pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                    type: string
+                type: object
+              model:
+                description: model is the role-based model configuration
+                properties:
+                  worker:
+                    description: worker defines the model configuration for the worker
+                      role
+                    properties:
+                      endpoint:
+                        description: |-
+                          endpoint is the custom endpoint URL. Omit to use the provider default.
+                          Required for Ollama and Azure OpenAI.
+                        type: string
+                      modelName:
+                        description: modelName is the model name identifier (e.g.
+                          claude-sonnet-4-20250514, gpt-4o, llama3.3)
+                        type: string
+                      params:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          params is a free-form map for provider-specific parameters (e.g. top_p, top_k).
+                          Values are passed through to the provider client as-is.
+                        type: object
+                      provider:
+                        description: provider is the LLM provider name (e.g. anthropic,
+                          openai, ollama, vertex, azure-openai, mistral)
+                        enum:
+                        - anthropic
+                        - openai
+                        - ollama
+                        - vertex
+                        - azure-openai
+                        - mistral
+                        type: string
+                      systemPrompt:
+                        description: |-
+                          systemPrompt overrides the base system prompt injected by the ThoughtMesh runtime.
+                          Omit to use the default.
+                        type: string
+                      temperature:
+                        default: "0.2"
+                        description: |-
+                          temperature is the sampling temperature (0.0–1.0). Lower values are more deterministic.
+                          Stored as string to comply with Kubernetes API conventions.
+                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
+                        type: string
+                    required:
+                    - modelName
+                    - provider
+                    type: object
+                required:
+                - worker
+                type: object
+              objective:
+                description: objective is the plain-language goal for the agent. One
+                  task, one goal.
+                minLength: 1
+                type: string
+              tools:
+                description: tools is the list of MCP servers available to the agent
+                items:
+                  description: Tool defines an MCP server available to the agent
+                  properties:
+                    name:
+                      description: name is the tool identifier
+                      minLength: 1
+                      type: string
+                    type:
+                      description: type is the tool type (currently only "mcp" is
+                        supported)
+                      enum:
+                      - mcp
+                      type: string
+                    url:
+                      description: url is the MCP server URL
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  - type
+                  - url
+                  type: object
+                type: array
             required:
-            - templateRef
+            - model
+            - objective
             type: object
           status:
             description: status defines the observed state of Agent
