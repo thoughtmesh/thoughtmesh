@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -199,19 +200,11 @@ func (r *AgentTemplateReconciler) validateSpec(ctx context.Context, agentTemplat
 		return fmt.Errorf("model.worker.apiName must not be empty")
 	}
 
-	// Validate timeout
-	if _, err := time.ParseDuration(spec.Limits.Timeout); err != nil {
-		return fmt.Errorf("invalid timeout duration: %s", spec.Limits.Timeout)
-	}
-
-	// Validate completion condition
-	validConditions := map[string]bool{
-		"objective-achieved": true,
-		"max-steps":          true,
-		"timeout":            true,
-	}
-	if !validConditions[spec.Lifecycle.Completion.Condition] {
-		return fmt.Errorf("invalid completion condition: %s", spec.Lifecycle.Completion.Condition)
+	// Validate timeout if specified
+	if spec.Limits.Timeout != "" {
+		if _, err := time.ParseDuration(spec.Limits.Timeout); err != nil {
+			return fmt.Errorf("invalid timeout duration: %s", spec.Limits.Timeout)
+		}
 	}
 
 	// Validate onSuccess
@@ -293,16 +286,13 @@ func (r *AgentTemplateReconciler) findAgentTemplatesForConfigMap(ctx context.Con
 	var requests []reconcile.Request
 	for _, template := range agentTemplateList.Items {
 		if template.Spec.Context != nil {
-			for _, cmName := range template.Spec.Context.ConfigMapRefs {
-				if cmName == configMap.GetName() {
-					requests = append(requests, reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      template.Name,
-							Namespace: template.Namespace,
-						},
-					})
-					break
-				}
+			if slices.Contains(template.Spec.Context.ConfigMapRefs, configMap.GetName()) {
+				requests = append(requests, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      template.Name,
+						Namespace: template.Namespace,
+					},
+				})
 			}
 		}
 	}
@@ -319,16 +309,13 @@ func (r *AgentTemplateReconciler) findAgentTemplatesForSecret(ctx context.Contex
 	var requests []reconcile.Request
 	for _, template := range agentTemplateList.Items {
 		if template.Spec.Context != nil {
-			for _, secretName := range template.Spec.Context.SecretRefs {
-				if secretName == secret.GetName() {
-					requests = append(requests, reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      template.Name,
-							Namespace: template.Namespace,
-						},
-					})
-					break
-				}
+			if slices.Contains(template.Spec.Context.SecretRefs, secret.GetName()) {
+				requests = append(requests, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      template.Name,
+						Namespace: template.Namespace,
+					},
+				})
 			}
 		}
 	}

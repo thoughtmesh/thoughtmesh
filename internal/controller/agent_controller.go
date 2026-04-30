@@ -47,13 +47,14 @@ const (
 
 // ResolvedAgentSpec contains the final merged spec to be used for Job creation
 type ResolvedAgentSpec struct {
-	Objective string
-	Model     corev1alpha1.ModelConfig
-	Image     string
-	Tools     []corev1alpha1.Tool
-	Context   *corev1alpha1.Context
-	Limits    corev1alpha1.Limits
-	Lifecycle corev1alpha1.Lifecycle
+	Objective  string
+	KeyResults []string
+	Model      corev1alpha1.ModelConfig
+	Image      string
+	Tools      []corev1alpha1.Tool
+	Context    *corev1alpha1.Context
+	Limits     corev1alpha1.Limits
+	Lifecycle  corev1alpha1.Lifecycle
 }
 
 // AgentReconciler reconciles a Agent object
@@ -242,13 +243,14 @@ func (r *AgentReconciler) validateAndGetTemplate(ctx context.Context, agent *cor
 // resolveSpec merges AgentTemplate spec with Agent-level overrides
 func (r *AgentReconciler) resolveSpec(template *corev1alpha1.AgentTemplate, agent *corev1alpha1.Agent) ResolvedAgentSpec {
 	resolved := ResolvedAgentSpec{
-		Objective: template.Spec.Objective,
-		Model:     template.Spec.Model,
-		Image:     template.Spec.Image,
-		Tools:     template.Spec.Tools,
-		Context:   template.Spec.Context,
-		Limits:    template.Spec.Limits,
-		Lifecycle: template.Spec.Lifecycle,
+		Objective:  template.Spec.Objective,
+		KeyResults: template.Spec.KeyResults,
+		Model:      template.Spec.Model,
+		Image:      template.Spec.Image,
+		Tools:      template.Spec.Tools,
+		Context:    template.Spec.Context,
+		Limits:     template.Spec.Limits,
+		Lifecycle:  template.Spec.Lifecycle,
 	}
 
 	// Apply overrides if present
@@ -292,13 +294,17 @@ func (r *AgentReconciler) resolveSpec(template *corev1alpha1.AgentTemplate, agen
 func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Agent, spec ResolvedAgentSpec) (*batchv1.Job, error) {
 	log := logf.FromContext(ctx)
 
-	// Parse timeout duration
-	timeout, err := time.ParseDuration(spec.Limits.Timeout)
-	if err != nil {
-		log.Error(err, "Failed to parse timeout duration")
-		return nil, err
+	// Parse timeout duration if specified
+	var activeDeadlineSeconds *int64
+	if spec.Limits.Timeout != "" {
+		timeout, err := time.ParseDuration(spec.Limits.Timeout)
+		if err != nil {
+			log.Error(err, "Failed to parse timeout duration")
+			return nil, err
+		}
+		seconds := int64(timeout.Seconds())
+		activeDeadlineSeconds = &seconds
 	}
-	activeDeadlineSeconds := int64(timeout.Seconds())
 
 	// Build environment variables
 	envVars := []corev1.EnvVar{}
@@ -319,6 +325,19 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 		Name:  "THOUGHTMESH_OBJECTIVE",
 		Value: spec.Objective,
 	})
+
+	// Add key results if present
+	if len(spec.KeyResults) > 0 {
+		keyResultsJSON, err := json.Marshal(spec.KeyResults)
+		if err != nil {
+			log.Error(err, "Failed to marshal key results")
+			return nil, err
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "THOUGHTMESH_KEY_RESULTS",
+			Value: string(keyResultsJSON),
+		})
+	}
 
 	// Add tools configuration
 	if len(spec.Tools) > 0 {
@@ -373,7 +392,7 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:          &zero,
-			ActiveDeadlineSeconds: &activeDeadlineSeconds,
+			ActiveDeadlineSeconds: activeDeadlineSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{

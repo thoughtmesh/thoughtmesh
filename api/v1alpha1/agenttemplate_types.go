@@ -32,7 +32,7 @@ type WorkerModelRoleConfig struct {
 
 	// apiName is the model name identifier (e.g. claude-sonnet-4-20250514, gpt-4o, llama3.3)
 	// +kubebuilder:validation:Required
-	ModelName string `json:"apiName"`
+	ModelName string `json:"modelName"`
 
 	// endpoint is the custom endpoint URL. Omit to use the provider default.
 	// Required for Ollama and Azure OpenAI.
@@ -98,10 +98,10 @@ type Context struct {
 // Limits defines resource and time constraints for the agent
 type Limits struct {
 	// timeout is the hard time limit in Go duration format (e.g. 5m, 30s, 1h).
-	// Agent is killed if exceeded.
-	// +kubebuilder:validation:Required
+	// Agent is killed if exceeded. If not specified, the agent runs without a timeout.
+	// +optional
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
-	Timeout string `json:"timeout"`
+	Timeout string `json:"timeout,omitempty"`
 }
 
 // RetryPolicy defines retry behavior on failure
@@ -117,13 +117,8 @@ type RetryPolicy struct {
 	BackoffSeconds int32 `json:"backoffSeconds,omitempty"`
 }
 
-// CompletionPolicy defines completion conditions and Pod disposition
+// CompletionPolicy defines Pod disposition after completion
 type CompletionPolicy struct {
-	// condition defines when the agent is considered done
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=objective-achieved;max-steps;timeout
-	Condition string `json:"condition"`
-
 	// onSuccess defines Pod disposition after success
 	// +kubebuilder:validation:Enum=delete;retain;archive
 	// +kubebuilder:default=retain
@@ -144,7 +139,7 @@ type Lifecycle struct {
 	RetryPolicy *RetryPolicy `json:"retryPolicy,omitempty"`
 
 	// completion defines completion conditions and Pod disposition
-	// +kubebuilder:validation:Required
+	// +optional
 	Completion CompletionPolicy `json:"completion"`
 }
 
@@ -159,6 +154,10 @@ type AgentTemplateSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Objective string `json:"objective"`
+
+	// keyResults is the list of measurable outcomes that indicate objective completion
+	// +optional
+	KeyResults []string `json:"keyResults,omitempty"`
 
 	// model is the role-based model configuration
 	// +kubebuilder:validation:Required
@@ -178,11 +177,11 @@ type AgentTemplateSpec struct {
 	Context *Context `json:"context,omitempty"`
 
 	// limits defines resource and time constraints for the agent
-	// +kubebuilder:validation:Required
+	// +optional
 	Limits Limits `json:"limits"`
 
 	// lifecycle defines retry and completion policies
-	// +kubebuilder:validation:Required
+	// +optional
 	Lifecycle Lifecycle `json:"lifecycle"`
 }
 

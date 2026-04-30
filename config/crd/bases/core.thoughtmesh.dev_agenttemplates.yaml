@@ -71,6 +71,12 @@ spec:
                   image is the container image for the agent Pod.
                   Omit to use the ThoughtMesh default runtime image.
                 type: string
+              keyResults:
+                description: keyResults is the list of measurable outcomes that indicate
+                  objective completion
+                items:
+                  type: string
+                type: array
               lifecycle:
                 description: lifecycle defines retry and completion policies
                 properties:
@@ -78,14 +84,6 @@ spec:
                     description: completion defines completion conditions and Pod
                       disposition
                     properties:
-                      condition:
-                        description: condition defines when the agent is considered
-                          done
-                        enum:
-                        - objective-achieved
-                        - max-steps
-                        - timeout
-                        type: string
                       onFailure:
                         default: retain
                         description: onFailure defines Pod disposition after failure
@@ -102,8 +100,6 @@ spec:
                         - retain
                         - archive
                         type: string
-                    required:
-                    - condition
                     type: object
                   retryPolicy:
                     description: retryPolicy defines retry behavior on failure
@@ -120,8 +116,6 @@ spec:
                         minimum: 0
                         type: integer
                     type: object
-                required:
-                - completion
                 type: object
               limits:
                 description: limits defines resource and time constraints for the
@@ -130,11 +124,9 @@ spec:
                   timeout:
                     description: |-
                       timeout is the hard time limit in Go duration format (e.g. 5m, 30s, 1h).
-                      Agent is killed if exceeded.
+                      Agent is killed if exceeded. If not specified, the agent runs without a timeout.
                     pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
                     type: string
-                required:
-                - timeout
                 type: object
               model:
                 description: model is the role-based model configuration
@@ -143,14 +135,14 @@ spec:
                     description: worker defines the model configuration for the worker
                       role
                     properties:
-                      apiName:
-                        description: apiName is the model name identifier (e.g. claude-sonnet-4-20250514,
-                          gpt-4o, llama3.3)
-                        type: string
                       endpoint:
                         description: |-
                           endpoint is the custom endpoint URL. Omit to use the provider default.
                           Required for Ollama and Azure OpenAI.
+                        type: string
+                      modelName:
+                        description: apiName is the model name identifier (e.g. claude-sonnet-4-20250514,
+                          gpt-4o, llama3.3)
                         type: string
                       params:
                         additionalProperties:
@@ -183,7 +175,7 @@ spec:
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                     required:
-                    - apiName
+                    - modelName
                     - provider
                     type: object
                 required:
@@ -220,8 +212,6 @@ spec:
                   type: object
                 type: array
             required:
-            - lifecycle
-            - limits
             - model
             - objective
             type: object
