@@ -32,9 +32,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
+
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1alpha1 "github.com/thoughtmesh/thoughtmesh/api/v1alpha1"
 )
@@ -45,17 +44,6 @@ const (
 	retryCountAnnotation = "thoughtmesh.dev/retry-count"
 )
 
-// ResolvedAgentSpec contains the final merged spec to be used for Job creation
-type ResolvedAgentSpec struct {
-	Objective string
-	Model     corev1alpha1.ModelConfig
-	Image     string
-	Tools     []corev1alpha1.Tool
-	Context   *corev1alpha1.Context
-	Limits    corev1alpha1.Limits
-	Lifecycle corev1alpha1.Lifecycle
-}
-
 // AgentReconciler reconciles a Agent object
 type AgentReconciler struct {
 	client.Client
@@ -65,7 +53,6 @@ type AgentReconciler struct {
 // +kubebuilder:rbac:groups=core.thoughtmesh.dev,resources=agents,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.thoughtmesh.dev,resources=agents/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.thoughtmesh.dev,resources=agents/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core.thoughtmesh.dev,resources=agenttemplates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
@@ -114,23 +101,14 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return r.handleDeletion(ctx, agent)
 	}
 
-	// Validate templateRef and get AgentTemplate
-	agentTemplate, result, err := r.validateAndGetTemplate(ctx, agent)
-	if err != nil || result != nil {
-		return *result, err
-	}
-
-	// Resolve final spec
-	resolvedSpec := r.resolveSpec(agentTemplate, agent)
-
 	// Check if Job already exists
 	job := &batchv1.Job{}
 	jobName := fmt.Sprintf("%s-job", agent.Name)
-	err = r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: agent.Namespace}, job)
+	err := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: agent.Namespace}, job)
 
 	if err != nil && apierrors.IsNotFound(err) {
 		// Create new Job
-		job, err = r.createJob(ctx, agent, resolvedSpec)
+		job, err = r.createJob(ctx, agent)
 		if err != nil {
 			log.Error(err, "Failed to create Job")
 			return ctrl.Result{}, err
@@ -142,7 +120,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Sync Job status to Agent status
-	return r.syncJobStatus(ctx, agent, job, resolvedSpec)
+	return r.syncJobStatus(ctx, agent, job)
 }
 
 // handleDeletion handles the deletion of an Agent resource
@@ -183,122 +161,23 @@ func (r *AgentReconciler) handleDeletion(ctx context.Context, agent *corev1alpha
 	return ctrl.Result{}, nil
 }
 
-// validateAndGetTemplate validates the templateRef and returns the AgentTemplate
-func (r *AgentReconciler) validateAndGetTemplate(ctx context.Context, agent *corev1alpha1.Agent) (*corev1alpha1.AgentTemplate, *ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-
-	// Fetch the AgentTemplate
-	agentTemplate := &corev1alpha1.AgentTemplate{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      agent.Spec.TemplateRef.Name,
-		Namespace: agent.Namespace,
-	}, agentTemplate)
-
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			log.Info("AgentTemplate not found")
-			r.setCondition(agent, metav1.Condition{
-				Type:               "Ready",
-				Status:             metav1.ConditionFalse,
-				Reason:             "TemplateNotFound",
-				Message:            fmt.Sprintf("AgentTemplate %s not found", agent.Spec.TemplateRef.Name),
-				ObservedGeneration: agent.Generation,
-			})
-			if updateErr := r.Status().Update(ctx, agent); updateErr != nil {
-				log.Error(updateErr, "Failed to update status")
-				return nil, nil, updateErr
-			}
-			// Requeue with backoff
-			result := ctrl.Result{RequeueAfter: 30 * time.Second}
-			return nil, &result, nil
-		}
-		log.Error(err, "Failed to get AgentTemplate")
-		return nil, nil, err
-	}
-
-	// Check if AgentTemplate is Ready
-	readyCondition := meta.FindStatusCondition(agentTemplate.Status.Conditions, "Ready")
-	if readyCondition == nil || readyCondition.Status != metav1.ConditionTrue {
-		log.Info("AgentTemplate is not ready")
-		r.setCondition(agent, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			Reason:             "TemplateNotReady",
-			Message:            fmt.Sprintf("AgentTemplate %s is not ready", agent.Spec.TemplateRef.Name),
-			ObservedGeneration: agent.Generation,
-		})
-		if updateErr := r.Status().Update(ctx, agent); updateErr != nil {
-			log.Error(updateErr, "Failed to update status")
-			return nil, nil, updateErr
-		}
-		// Requeue with backoff
-		result := ctrl.Result{RequeueAfter: 30 * time.Second}
-		return nil, &result, nil
-	}
-
-	return agentTemplate, nil, nil
-}
-
-// resolveSpec merges AgentTemplate spec with Agent-level overrides
-func (r *AgentReconciler) resolveSpec(template *corev1alpha1.AgentTemplate, agent *corev1alpha1.Agent) ResolvedAgentSpec {
-	resolved := ResolvedAgentSpec{
-		Objective: template.Spec.Objective,
-		Model:     template.Spec.Model,
-		Image:     template.Spec.Image,
-		Tools:     template.Spec.Tools,
-		Context:   template.Spec.Context,
-		Limits:    template.Spec.Limits,
-		Lifecycle: template.Spec.Lifecycle,
-	}
-
-	// Apply overrides if present
-	if agent.Spec.Overrides != nil {
-		overrides := agent.Spec.Overrides
-
-		if overrides.Model != nil {
-			resolved.Model = *overrides.Model
-		}
-
-		if overrides.Image != nil {
-			resolved.Image = *overrides.Image
-		}
-
-		if overrides.Tools != nil {
-			resolved.Tools = overrides.Tools
-		}
-
-		if overrides.Context != nil {
-			resolved.Context = overrides.Context
-		}
-
-		if overrides.Limits != nil {
-			resolved.Limits = *overrides.Limits
-		}
-
-		if overrides.Lifecycle != nil {
-			resolved.Lifecycle = *overrides.Lifecycle
-		}
-	}
-
-	// Use default image if not specified
-	if resolved.Image == "" {
-		resolved.Image = defaultRuntimeImage
-	}
-
-	return resolved
-}
-
 // createJob creates a Kubernetes Job for the Agent
-func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Agent, spec ResolvedAgentSpec) (*batchv1.Job, error) {
+func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Agent) (*batchv1.Job, error) {
 	log := logf.FromContext(ctx)
 
-	// Parse timeout duration
-	timeout, err := time.ParseDuration(spec.Limits.Timeout)
-	if err != nil {
-		log.Error(err, "Failed to parse timeout duration")
-		return nil, err
+	spec := &agent.Spec
+
+	// Parse timeout duration if specified
+	var activeDeadlineSeconds *int64
+	if spec.Limits != nil && spec.Limits.Timeout != "" {
+		timeout, err := time.ParseDuration(spec.Limits.Timeout)
+		if err != nil {
+			log.Error(err, "Failed to parse timeout duration")
+			return nil, err
+		}
+		seconds := int64(timeout.Seconds())
+		activeDeadlineSeconds = &seconds
 	}
-	activeDeadlineSeconds := int64(timeout.Seconds())
 
 	// Build environment variables
 	envVars := []corev1.EnvVar{}
@@ -319,6 +198,19 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 		Name:  "THOUGHTMESH_OBJECTIVE",
 		Value: spec.Objective,
 	})
+
+	// Add key results if present
+	if len(spec.KeyResults) > 0 {
+		keyResultsJSON, err := json.Marshal(spec.KeyResults)
+		if err != nil {
+			log.Error(err, "Failed to marshal key results")
+			return nil, err
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "THOUGHTMESH_KEY_RESULTS",
+			Value: string(keyResultsJSON),
+		})
+	}
 
 	// Add tools configuration
 	if len(spec.Tools) > 0 {
@@ -373,7 +265,7 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:          &zero,
-			ActiveDeadlineSeconds: &activeDeadlineSeconds,
+			ActiveDeadlineSeconds: activeDeadlineSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -385,7 +277,7 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 					Containers: []corev1.Container{
 						{
 							Name:    "agent-runtime",
-							Image:   spec.Image,
+							Image:   r.getImage(spec),
 							Env:     envVars,
 							EnvFrom: envFrom,
 							Command: []string{"/thoughtmesh/runtime"},
@@ -419,8 +311,16 @@ func (r *AgentReconciler) createJob(ctx context.Context, agent *corev1alpha1.Age
 	return job, nil
 }
 
+// getImage returns the image to use for the agent, using default if not specified
+func (r *AgentReconciler) getImage(spec *corev1alpha1.AgentSpec) string {
+	if spec.Image != "" {
+		return spec.Image
+	}
+	return defaultRuntimeImage
+}
+
 // syncJobStatus syncs the Job status to Agent status
-func (r *AgentReconciler) syncJobStatus(ctx context.Context, agent *corev1alpha1.Agent, job *batchv1.Job, spec ResolvedAgentSpec) (ctrl.Result, error) {
+func (r *AgentReconciler) syncJobStatus(ctx context.Context, agent *corev1alpha1.Agent, job *batchv1.Job) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// Update Job reference if not set
@@ -462,9 +362,9 @@ func (r *AgentReconciler) syncJobStatus(ctx context.Context, agent *corev1alpha1
 
 	// Handle completion
 	if agent.Status.Phase == "Succeeded" && previousPhase != "Succeeded" {
-		return r.handleSuccess(ctx, agent, job, spec)
+		return r.handleSuccess(ctx, agent, job)
 	} else if agent.Status.Phase == "Failed" && previousPhase != "Failed" {
-		return r.handleFailure(ctx, agent, job, spec)
+		return r.handleFailure(ctx, agent, job)
 	}
 
 	// If still running or pending, continue monitoring
@@ -476,7 +376,7 @@ func (r *AgentReconciler) syncJobStatus(ctx context.Context, agent *corev1alpha1
 }
 
 // handleSuccess handles successful Job completion
-func (r *AgentReconciler) handleSuccess(ctx context.Context, agent *corev1alpha1.Agent, job *batchv1.Job, spec ResolvedAgentSpec) (ctrl.Result, error) {
+func (r *AgentReconciler) handleSuccess(ctx context.Context, agent *corev1alpha1.Agent, job *batchv1.Job) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// Set ObjectiveAchieved condition
@@ -502,9 +402,9 @@ func (r *AgentReconciler) handleSuccess(ctx context.Context, agent *corev1alpha1
 	}
 
 	// Apply onSuccess disposition policy
-	disposition := spec.Lifecycle.Completion.OnSuccess
-	if disposition == "" {
-		disposition = "retain"
+	disposition := "retain"
+	if agent.Spec.Lifecycle != nil && agent.Spec.Lifecycle.Completion.OnSuccess != "" {
+		disposition = agent.Spec.Lifecycle.Completion.OnSuccess
 	}
 
 	switch disposition {
@@ -532,7 +432,7 @@ func (r *AgentReconciler) handleSuccess(ctx context.Context, agent *corev1alpha1
 }
 
 // handleFailure handles failed Job completion
-func (r *AgentReconciler) handleFailure(ctx context.Context, agent *corev1alpha1.Agent, job *batchv1.Job, spec ResolvedAgentSpec) (ctrl.Result, error) {
+func (r *AgentReconciler) handleFailure(ctx context.Context, agent *corev1alpha1.Agent, job *batchv1.Job) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// Check retry policy
@@ -545,10 +445,10 @@ func (r *AgentReconciler) handleFailure(ctx context.Context, agent *corev1alpha1
 
 	maxRetries := int32(0)
 	backoffSeconds := int32(30)
-	if spec.Lifecycle.RetryPolicy != nil {
-		maxRetries = spec.Lifecycle.RetryPolicy.MaxRetries
-		if spec.Lifecycle.RetryPolicy.BackoffSeconds > 0 {
-			backoffSeconds = spec.Lifecycle.RetryPolicy.BackoffSeconds
+	if agent.Spec.Lifecycle != nil && agent.Spec.Lifecycle.RetryPolicy != nil {
+		maxRetries = agent.Spec.Lifecycle.RetryPolicy.MaxRetries
+		if agent.Spec.Lifecycle.RetryPolicy.BackoffSeconds > 0 {
+			backoffSeconds = agent.Spec.Lifecycle.RetryPolicy.BackoffSeconds
 		}
 	}
 
@@ -610,9 +510,9 @@ func (r *AgentReconciler) handleFailure(ctx context.Context, agent *corev1alpha1
 	}
 
 	// Apply onFailure disposition policy
-	disposition := spec.Lifecycle.Completion.OnFailure
-	if disposition == "" {
-		disposition = "retain"
+	disposition := "retain"
+	if agent.Spec.Lifecycle != nil && agent.Spec.Lifecycle.Completion.OnFailure != "" {
+		disposition = agent.Spec.Lifecycle.Completion.OnFailure
 	}
 
 	switch disposition {
@@ -661,36 +561,11 @@ func (r *AgentReconciler) setCondition(agent *corev1alpha1.Agent, condition meta
 	meta.SetStatusCondition(&agent.Status.Conditions, condition)
 }
 
-// findAgentsForTemplate finds all Agents that reference an AgentTemplate
-func (r *AgentReconciler) findAgentsForTemplate(ctx context.Context, template client.Object) []reconcile.Request {
-	agentList := &corev1alpha1.AgentList{}
-	if err := r.List(ctx, agentList, client.InNamespace(template.GetNamespace())); err != nil {
-		return []reconcile.Request{}
-	}
-
-	var requests []reconcile.Request
-	for _, agent := range agentList.Items {
-		if agent.Spec.TemplateRef.Name == template.GetName() {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      agent.Name,
-					Namespace: agent.Namespace,
-				},
-			})
-		}
-	}
-	return requests
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.Agent{}).
 		Owns(&batchv1.Job{}).
-		Watches(
-			&corev1alpha1.AgentTemplate{},
-			handler.EnqueueRequestsFromMapFunc(r.findAgentsForTemplate),
-		).
 		Named("agent").
 		Complete(r)
 }

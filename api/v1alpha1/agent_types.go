@@ -23,39 +23,124 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// TemplateRef references an AgentTemplate
-type TemplateRef struct {
-	// name is the name of the AgentTemplate to run
+// WorkerModelRoleConfig defines the configuration for a worker model role
+type WorkerModelRoleConfig struct {
+	// provider is the LLM provider name (e.g. anthropic, openai, ollama, vertex, azure-openai, mistral)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=anthropic;openai;ollama;vertex;azure-openai;mistral
+	Provider string `json:"provider"`
+
+	// modelName is the model name identifier (e.g. claude-sonnet-4-20250514, gpt-4o, llama3.3)
+	// +kubebuilder:validation:Required
+	ModelName string `json:"modelName"`
+
+	// endpoint is the custom endpoint URL. Omit to use the provider default.
+	// Required for Ollama and Azure OpenAI.
+	// +optional
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// temperature is the sampling temperature (0.0–1.0). Lower values are more deterministic.
+	// Stored as string to comply with Kubernetes API conventions.
+	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
+	// +kubebuilder:default="0.2"
+	// +optional
+	Temperature string `json:"temperature,omitempty"`
+
+	// systemPrompt overrides the base system prompt injected by the ThoughtMesh runtime.
+	// Omit to use the default.
+	// +optional
+	SystemPrompt string `json:"systemPrompt,omitempty"`
+
+	// params is a free-form map for provider-specific parameters (e.g. top_p, top_k).
+	// Values are passed through to the provider client as-is.
+	// +optional
+	Params map[string]string `json:"params,omitempty"`
+}
+
+// ModelConfig defines the role-based model configuration
+type ModelConfig struct {
+	// worker defines the model configuration for the worker role
+	// +kubebuilder:validation:Required
+	Worker WorkerModelRoleConfig `json:"worker"`
+}
+
+// Tool defines an MCP server available to the agent
+type Tool struct {
+	// name is the tool identifier
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
+
+	// type is the tool type (currently only "mcp" is supported)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=mcp
+	Type string `json:"type"`
+
+	// url is the MCP server URL
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	URL string `json:"url"`
 }
 
-// AgentTemplateOverrides allows selective override of AgentTemplate fields for a specific run
-type AgentTemplateOverrides struct {
-	// model overrides the model configuration
+// Context defines Kubernetes-native config and credential sources
+type Context struct {
+	// configMapRefs is an ordered list of ConfigMaps mounted as env vars.
+	// Later entries overwrite conflicting keys from earlier ones.
 	// +optional
-	Model *ModelConfig `json:"model,omitempty"`
+	ConfigMapRefs []string `json:"configMapRefs,omitempty"`
 
-	// image overrides the container image
+	// secretRefs is an ordered list of Secrets mounted as env vars.
+	// Later entries overwrite conflicting keys from earlier ones.
 	// +optional
-	Image *string `json:"image,omitempty"`
+	SecretRefs []string `json:"secretRefs,omitempty"`
+}
 
-	// tools overrides the tools list
+// Limits defines resource and time constraints for the agent
+type Limits struct {
+	// timeout is the hard time limit in Go duration format (e.g. 5m, 30s, 1h).
+	// Agent is killed if exceeded. If not specified, the agent runs without a timeout.
 	// +optional
-	Tools []Tool `json:"tools,omitempty"`
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
+	Timeout string `json:"timeout,omitempty"`
+}
 
-	// context overrides the context configuration
+// RetryPolicy defines retry behavior on failure
+type RetryPolicy struct {
+	// maxRetries is the maximum number of retry attempts
+	// +kubebuilder:validation:Minimum=0
 	// +optional
-	Context *Context `json:"context,omitempty"`
+	MaxRetries int32 `json:"maxRetries,omitempty"`
 
-	// limits overrides the limits configuration
+	// backoffSeconds is the delay in seconds before retrying
+	// +kubebuilder:validation:Minimum=0
 	// +optional
-	Limits *Limits `json:"limits,omitempty"`
+	BackoffSeconds int32 `json:"backoffSeconds,omitempty"`
+}
 
-	// lifecycle overrides the lifecycle configuration
+// CompletionPolicy defines Pod disposition after completion
+type CompletionPolicy struct {
+	// onSuccess defines Pod disposition after success
+	// +kubebuilder:validation:Enum=delete;retain;archive
+	// +kubebuilder:default=retain
 	// +optional
-	Lifecycle *Lifecycle `json:"lifecycle,omitempty"`
+	OnSuccess string `json:"onSuccess,omitempty"`
+
+	// onFailure defines Pod disposition after failure
+	// +kubebuilder:validation:Enum=delete;retain;archive
+	// +kubebuilder:default=retain
+	// +optional
+	OnFailure string `json:"onFailure,omitempty"`
+}
+
+// Lifecycle defines retry and completion policies
+type Lifecycle struct {
+	// retryPolicy defines retry behavior on failure
+	// +optional
+	RetryPolicy *RetryPolicy `json:"retryPolicy,omitempty"`
+
+	// completion defines completion conditions and Pod disposition
+	// +optional
+	Completion CompletionPolicy `json:"completion,omitempty"`
 }
 
 // AgentSpec defines the desired state of Agent
@@ -65,13 +150,39 @@ type AgentSpec struct {
 	// The following markers will use OpenAPI v3 schema to validate the value
 	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
 
-	// templateRef references the AgentTemplate to run
+	// objective is the plain-language goal for the agent. One task, one goal.
 	// +kubebuilder:validation:Required
-	TemplateRef TemplateRef `json:"templateRef"`
+	// +kubebuilder:validation:MinLength=1
+	Objective string `json:"objective"`
 
-	// overrides allows selectively overriding any AgentTemplate field for this run
+	// keyResults is the list of measurable outcomes that indicate objective completion
 	// +optional
-	Overrides *AgentTemplateOverrides `json:"overrides,omitempty"`
+	KeyResults []string `json:"keyResults,omitempty"`
+
+	// model is the role-based model configuration
+	// +kubebuilder:validation:Required
+	Model ModelConfig `json:"model"`
+
+	// image is the container image for the agent Pod.
+	// Omit to use the ThoughtMesh default runtime image.
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// tools is the list of MCP servers available to the agent
+	// +optional
+	Tools []Tool `json:"tools,omitempty"`
+
+	// context declares Kubernetes-native config and credential sources
+	// +optional
+	Context *Context `json:"context,omitempty"`
+
+	// limits defines resource and time constraints for the agent
+	// +optional
+	Limits *Limits `json:"limits,omitempty"`
+
+	// lifecycle defines retry and completion policies
+	// +optional
+	Lifecycle *Lifecycle `json:"lifecycle,omitempty"`
 }
 
 // JobReference references a Kubernetes Job
